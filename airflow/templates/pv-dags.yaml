@@ -1,0 +1,26 @@
+{{- if and (.Values.dags.persistence.enabled) (not .Values.dags.persistence.existingClaim) }}
+{{- if .Values.dags.persistence.pdName -}}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Values.dags.persistence.pdName }}
+  labels:
+    app: {{ include "airflow.labels.app" . }}
+    chart: {{ include "airflow.labels.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  capacity:
+    storage: {{ .Values.dags.persistence.size }}
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ .Values.dags.persistence.storageClass }}
+  claimRef:
+    namespace: {{ .Release.Namespace }}
+    name: {{ printf "%s-dags" (include "airflow.fullname" . | trunc 58) }}
+  csi:
+    driver: efs.csi.aws.com
+    volumeHandle: {{ .Values.dags.persistence.volumeId }}
+{{- end }}
+{{- end }}

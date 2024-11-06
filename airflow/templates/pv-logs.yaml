@@ -1,0 +1,26 @@
+{{- if and (.Values.logs.persistence.enabled) (not .Values.logs.persistence.existingClaim) }}
+{{- if .Values.logs.persistence.pdName -}}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Values.logs.persistence.pdName }}
+  labels:
+    app: {{ include "airflow.labels.app" . }}
+    chart: {{ include "airflow.labels.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  capacity:
+    storage: {{ .Values.logs.persistence.size }}
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ .Values.logs.persistence.storageClass }}
+  claimRef:
+    namespace: {{ .Release.Namespace }}
+    name: {{ printf "%s-logs" (include "airflow.fullname" . | trunc 58) }}
+  csi:
+    driver: efs.csi.aws.com
+    volumeHandle: {{ .Values.logs.persistence.volumeId }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,317 @@
+airflow:
+  legacyCommands: false
+  image:
+    repository: nexus.com/airflow
+    tag: 2.7.3
+    pullPolicy: IfNotPresent
+    pullSecret: "nexus-credentails"
+    uid: 50000
+    gid: 0
+  executor: KubernetesExecutor
+  fernetKey: "---"
+  webserverSecretKey: "THIS IS UNSAFE!"
+  config:
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    AIRFLOW__WEBSERVER__BASE_URL : "http://airflow.myspace.xyz/airflow"
+    AIRFLOW__SECRETS__BACKEND: "airflow.providers.amazon.aws.secrets.secrets_manager.SecretsManagerBackend"
+    AIRFLOW__SECRETS__BACKEND_KWARGS: '{"connections_prefix" : "airflow/connections", "variables_prefix" : "airflow/variables"}'
+    AWS_DEFAULT_REGION: "us-east-1"
+    AIRFLOW__CORE__PLUGINS_FOLDER: "/opt/airflow/dags/plugins"
+    SQLALCHEMY_SILENCE_UBER_WARNING: 1
+    AIRFLOW__KUBERNETES__LOGS_VOLUME_CLAIM: "efs-claim"
+    AIRFLOW__METRICS__STATSD_ON: True
+    #AIRFLOW__METRICS__STATSD_HOST: "datadog"
+    AIRFLOW__METRICS__STATSD_PORT: 8125
+    AIRFLOW__METRICS__STATSD_PREFIX: "airflow"
+    AIRFLOW__CORE__PARALLELISM: 10000
+    AIRFLOW__CORE__DAG_CONCURRENCY: 10000
+    AIRFLOW__KUBERNETES__WORKER_PODS_CREATION_BATCH_SIZE: 4
+  podAnnotations:
+    ad.datadoghq.com/airflow-web.check_names: '["airflow"]'
+    ad.datadoghq.com/airflow-web.init_configs: '[{}]'
+    ad.datadoghq.com/airflow-web.instances: '[{"url": "%%host%%", "tls_verify": "false"}]'
+  users:
+    - username: admin
+      password: admin
+      role: Admin
+      email: admin@example.com
+      firstName: admin
+      lastName: admin
+  connections: []
+  defaultNodeSelector: 
+    node-pool: airflow-worker
+  defaultTolerations:
+    - key: node-pool
+      operator: Equal
+      value: airflow-worker
+  dbMigrations:
+    enabled: true
+    nodepool : airflow-general
+    resources:
+      limits:
+        cpu: "2000m"
+        memory: "2048Mi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi"     
+  variables: []
+  pools:
+    - name: "metadata"
+      slots: 20
+      description: "metadata"
+  defaultSecurityContext:
+    fsGroup: 0
+  extraPipPackages: []
+  extraEnv:
+    - name: DD_AGENT_HOST
+      valueFrom:
+        fieldRef:
+          fieldPath: status.hostIP
+    - name: AIRFLOW__SCHEDULER__STATSD_HOST
+      valueFrom:
+        fieldRef:
+          fieldPath: status.hostIP
+    - name: AIRFLOW__METRICS__STATSD_HOST
+      valueFrom:
+        fieldRef:
+          fieldPath: status.hostIP      
+  extraVolumeMounts: []
+  extraVolumes: []
+  kubernetesPodTemplate:
+    stringOverride: ""
+    defaultTolerations:
+      - key: node-pool
+        operator: Equal
+        value: airflow-worker
+    resources:
+      limits:
+        cpu: "2000m"
+        memory: "2048Mi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi" 
+    nodeSelectorTSmall:
+        node-pool: airflow-worker
+    tolerationsTSmall:
+      - key: node-pool
+        operator: Equal
+        value: airflow-worker
+    resourcesTSmall:
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi" 
+    nodeSelectorTMedium:
+        node-pool: airflow-worker
+    tolerationsTMedium:
+      - key: node-pool
+        operator: Equal
+        value: airflow-worker
+    resourcesTMedium:
+      limits:
+        cpu: "1"
+        memory: "1024Mi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+    nodeSelectorTLarge:
+        node-pool: airflow-worker
+    tolerationsTLarge:
+      - key: node-pool
+        operator: Equal
+        value: airflow-worker
+    resourcesTLarge:
+      limits:
+        cpu: "1500m"
+        memory: "1500Mi"
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+    extraPipPackages: []
+    extraVolumeMounts: []
+    extraVolumes: []
+    extraInitContainers:  []
+
+syncUser:
+  nodepool : airflow-general
+  resources:
+    limits:
+      cpu: "2000m"
+      memory: "2048Mi"
+    requests:
+      cpu: "500m"
+      memory: "512Mi" 
+
+SyncPool:
+  nodepool : airflow-general
+  resources:
+    limits:
+      cpu: "2000m"
+      memory: "2048Mi"
+    requests:
+      cpu: "500m"
+      memory: "512Mi" 
+
+scheduler:
+  replicas: 2
+  resources:
+    limits:
+      cpu: "2000m"
+      memory: "3072Mi"
+    requests:
+      cpu: "1000m"
+      memory: "2048Mi" 
+  nodeSelector:
+    node-pool: airflow-scheduler-A
+  tolerations:
+    - key: node-pool
+      operator: Equal
+      value: airflow-scheduler-A
+  extraInitContainers: 
+    - name: volume-dags-mount-hack
+      image: busybox
+      command: ["sh", "-c", "chown -R 50000: /dags && echo 'dags command is done'"]
+      volumeMounts:
+        - mountPath: /dags
+          name: dags-data
+    - name: volume-logs-mount-hack
+      image: busybox
+      command: ["sh", "-c", "echo 'chown -R 50000: /logs is giving issue here' "]
+      volumeMounts:
+        - mountPath: /logs
+          name: logs-data
+      volumeMounts:
+        - mountPath: /opt/airflow/dags
+          name: dags-data
+  logCleanup:
+    enabled: false
+    retentionMinutes: 21600
+  livenessProbe:
+    enabled: true
+    taskCreationCheck:
+      enabled: false
+      thresholdSeconds: 300
+      schedulerAgeBeforeCheck: 180
+
+web:
+  replicas: 1
+  resources:
+    limits:
+      cpu: "1000m"
+      memory: "3072Mi"
+    requests:
+      cpu: "1000m"
+      memory: "2048Mi" 
+  service:
+    type: ClusterIP
+    externalPort: 8080
+  nodepool: airflow-general
+  webserverConfig:
+    stringOverride: |
+      from airflow import configuration as conf
+      from flask_appbuilder.security.manager import AUTH_DB
+      
+      # the SQLAlchemy connection string
+      SQLALCHEMY_DATABASE_URI = conf.get("core", "SQL_ALCHEMY_CONN")
+      
+      # use embedded DB for auth
+      AUTH_TYPE = AUTH_DB
+    existingSecret: "" 
+
+workers:
+  enabled: false
+
+triggerer:
+  enabled: true
+  replicas: 1
+  nodepool : airflow-general
+  resources:
+    limits:
+      cpu: "2000m"
+      memory: "2048Mi"
+    requests:
+      cpu: "500m"
+      memory: "512Mi" 
+  capacity: 1000
+  extraContainers: []
+
+flower:
+  enabled: false
+
+logs:
+  path: /opt/airflow/logs
+  persistence:
+    enabled: true
+    storageClass: "efs-sc"    
+    size: 8Gi    
+    accessMode: ReadWriteMany
+    pdName: airflow-logs-site-automation-pv
+    volumeId: fs-02d447056d7838117
+    existingClaim: ""
+
+#EFS
+dags:
+  path: /opt/airflow/dags
+  persistence:
+    enabled: true
+    storageClass: "efs-sc"    
+    size: 8Gi    
+    accessMode: ReadWriteMany
+    pdName: airflow-dags-site-automation-pv
+    volumeId: fs-98dfdummydg90s8dummy
+    existingClaim: ""
+  gitSync:
+    enabled: false
+
+ingress:
+  enabled: true
+  apiVersion: networking.k8s.io/v1
+  web:
+    annotations: {}
+    host: "airflow.myspace.xyz"
+    path: "/airflow"
+    ingressClassName: "traefik-internal"
+
+extraManifests: []
+
+pgbouncer:
+  enabled: false
+  resources: {}
+  authType: md5
+
+postgresql:
+  enabled: false
+  persistence:
+    enabled: false
+    storageClass: "gp2"
+    size: 8Gi
+
+#RDS
+externalDatabase:
+  type: postgres
+  host: 10.0.0.13
+  port: 5432
+  database: airflow_blue
+  user: postgres
+  passwordSecret: "db-password"
+  passwordSecretKey: "password"
+
+redis:
+  enabled: false
+
+externalRedis:
+  host: localhost
+
+serviceAccount:
+  enabled: true
+  name: "airflow-service-role-iam"
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::1234567890:role/airflow-service-role-iam"
+
+devops:
+  tenant: shared
+  nodepool: airflow
+  app: airflow
